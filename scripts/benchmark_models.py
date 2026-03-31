@@ -78,6 +78,19 @@ def select_models(candidates: list[str], max_models: int) -> list[str]:
     return candidates[:target]
 
 
+def normalize_model_inputs(tokens: list[str] | None) -> list[str]:
+    if not tokens:
+        return []
+
+    normalized: list[str] = []
+    for token in tokens:
+        for part in token.split(","):
+            candidate = part.strip()
+            if candidate:
+                normalized.append(candidate)
+    return normalized
+
+
 def run_model_prompt(model_name: str, prompt: str) -> tuple[str, float]:
     started = perf_counter()
     completed = subprocess.run(
@@ -152,7 +165,8 @@ def write_report(payload: dict) -> Path:
 def main() -> int:
     args = parse_args()
 
-    candidates = args.models if args.models else discover_installed_models()
+    normalized_models = normalize_model_inputs(args.models)
+    candidates = normalized_models if normalized_models else discover_installed_models()
     models = select_models(candidates, args.max_models)
 
     if not models:
