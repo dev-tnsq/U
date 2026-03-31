@@ -8,6 +8,7 @@ from .schemas import (
     PlannerPreview,
     TrustLevel,
 )
+from .tools import RegisteredTool, ToolRegistry, ToolRisk
 
 __all__ = [
     "ActionExecutor",
@@ -16,5 +17,8 @@ __all__ = [
     "PlannerExecutionEnvelope",
     "PlannerPreview",
     "PlannerRuntime",
+    "RegisteredTool",
+    "ToolRegistry",
+    "ToolRisk",
     "TrustLevel",
 ]
