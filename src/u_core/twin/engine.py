@@ -13,10 +13,12 @@ class TwinReasoningEngine:
         self,
         inference_client: InferenceClient | None = None,
         model_profile: ModelProfile | None = None,
+        strict_runtime: bool = True,
     ) -> None:
         self._fallback_client = LocalHeuristicClient()
         self._inference_client = inference_client or self._fallback_client
         self._model_profile = model_profile or get_model_profile("8gb")
+        self._strict_runtime = strict_runtime
 
     def generate_dual_response(self, user_text: str, context: TwinContext) -> TwinResponse:
         grounding = self._build_grounding(context)
@@ -39,7 +41,11 @@ class TwinReasoningEngine:
                 grounding,
                 self._model_profile,
             )
-        except Exception:
+        except Exception as exc:
+            if self._strict_runtime:
+                raise RuntimeError(
+                    "Twin runtime inference failed and strict_runtime=True"
+                ) from exc
             return self._fallback_client.generate_dual_response(
                 user_text,
                 grounding,

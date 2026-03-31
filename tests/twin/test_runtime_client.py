@@ -68,10 +68,23 @@ class TestRuntimeClientBehavior(unittest.TestCase):
 
         self.assertEqual(first, second)
 
-    def test_engine_falls_back_to_heuristic_when_runtime_fails(self) -> None:
+    def test_engine_raises_in_strict_mode_when_runtime_fails(self) -> None:
         engine = TwinReasoningEngine(
             inference_client=_FailingClient(),
             model_profile=get_model_profile("16gb"),
+        )
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "Twin runtime inference failed and strict_runtime=True",
+        ):
+            engine.generate_dual_response("", TwinContext())
+
+    def test_engine_falls_back_in_non_strict_mode_when_runtime_fails(self) -> None:
+        engine = TwinReasoningEngine(
+            inference_client=_FailingClient(),
+            model_profile=get_model_profile("16gb"),
+            strict_runtime=False,
         )
 
         response = engine.generate_dual_response("", TwinContext())
