@@ -23,6 +23,11 @@ from u_core.agent.policy import (
 
 
 class TestAgentPolicy(unittest.TestCase):
+    def test_default_allowed_scopes_include_device_apps_and_settings(self) -> None:
+        self.assertIn("device:read", DEFAULT_ALLOWED_SCOPES)
+        self.assertIn("apps:read", DEFAULT_ALLOWED_SCOPES)
+        self.assertIn("settings:read", DEFAULT_ALLOWED_SCOPES)
+
     def test_default_policy_has_safe_defaults(self) -> None:
         policy = default_policy()
 

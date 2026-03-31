@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import argparse
 import os
+import platform
+import socket
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,8 +18,11 @@ from u_core.memory import SQLiteStore
 
 DEFAULT_EXCLUDE_PARTS = ".git,.venv,node_modules,__pycache__,.pytest_cache,Library"
 DEFAULT_EXTENSIONS = "txt,md,json,csv,log,py,yaml,yml,toml"
+DEFAULT_APP_ROOTS = "/Applications,~/Applications"
 METADATA_ONLY_MARKER = "[metadata-only]"
 TEXT_SAMPLE_MAX_CHARS = 4000
+SAFE_ENV_KEYS = ("PATH", "SHELL", "HOME", "LANG")
+SECRET_KEY_PARTS = ("TOKEN", "KEY", "SECRET")
 
 
 def _default_db_path() -> Path:
@@ -79,6 +85,30 @@ def parse_exclude_parts(raw: str | None) -> set[str]:
     return {item.strip() for item in target.split(",") if item.strip()}
 
 
+def parse_app_roots(raw: str | None, home: Path | None = None) -> list[Path]:
+    base = home or Path.home()
+    target = raw if raw is not None else DEFAULT_APP_ROOTS
+    roots: list[Path] = []
+    for item in target.split(","):
+        value = item.strip()
+        if not value:
+            continue
+        if value.startswith("~"):
+            value = value.replace("~", str(base), 1)
+        roots.append(Path(value))
+
+    resolved: list[Path] = []
+    seen: set[str] = set()
+    for root in roots:
+        absolute = root.resolve()
+        key = str(absolute)
+        if key in seen:
+            continue
+        seen.add(key)
+        resolved.append(absolute)
+    return resolved
+
+
 def should_exclude_path(path: Path, excluded_parts: set[str]) -> bool:
     return any(part in excluded_parts for part in path.parts)
 
@@ -86,6 +116,26 @@ def should_exclude_path(path: Path, excluded_parts: set[str]) -> bool:
 def sample_text(path: Path, max_chars: int = TEXT_SAMPLE_MAX_CHARS) -> str:
     content = path.read_text(encoding="utf-8", errors="replace")
     return content[:max_chars]
+
+
+def is_secret_like_env_key(key: str) -> bool:
+    upper = key.upper()
+    return any(part in upper for part in SECRET_KEY_PARTS)
+
+
+def safe_settings_snapshot(env: dict[str, str] | None = None) -> dict[str, str]:
+    source = env if env is not None else dict(os.environ)
+    snapshot: dict[str, str] = {}
+    for key in SAFE_ENV_KEYS:
+        if key in source and not is_secret_like_env_key(key):
+            snapshot[key] = source[key]
+
+    if "TZ" in source and not is_secret_like_env_key("TZ"):
+        snapshot["TZ"] = source["TZ"]
+    else:
+        tz_name = time.tzname[0] if time.tzname else ""
+        snapshot["timezone"] = tz_name
+    return snapshot
 
 
 def parse_args() -> argparse.Namespace:
@@ -122,6 +172,26 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_EXTENSIONS,
         help="Comma-separated file extensions allowed for text sampling.",
     )
+    parser.add_argument(
+        "--collect-device-info",
+        action="store_true",
+        help="Collect one local device metadata event (requires device:read).",
+    )
+    parser.add_argument(
+        "--collect-app-inventory",
+        action="store_true",
+        help="Collect local .app bundle inventory events (requires apps:read).",
+    )
+    parser.add_argument(
+        "--collect-system-settings",
+        action="store_true",
+        help="Collect a safe system settings snapshot event (requires settings:read).",
+    )
+    parser.add_argument(
+        "--app-roots",
+        default=DEFAULT_APP_ROOTS,
+        help="Comma-separated roots for .app inventory.",
+    )
     return parser.parse_args()
 
 
@@ -143,11 +213,65 @@ def _iter_files(roots: list[Path], excluded_parts: set[str]):
                 yield root, candidate
 
 
-def _enforce_consent_and_scope() -> None:
+def enforce_scope(policy_scopes: set[str], required_scope: str, purpose: str) -> None:
+    if required_scope not in policy_scopes:
+        raise RuntimeError(
+            f"Policy violation: {required_scope} scope is required for {purpose}."
+        )
+
+
+def _load_enforced_policy_scopes() -> set[str]:
     policy = load_policy()
     ensure_policy_allows_runtime(policy)
-    if "memory:write" not in set(policy.allowed_scopes):
-        raise RuntimeError("Policy violation: memory:write scope is required for local ingestion.")
+    return set(policy.allowed_scopes)
+
+
+def _iter_app_bundles(roots: list[Path]):
+    for root in roots:
+        if not root.exists() or not root.is_dir():
+            continue
+        for dirpath, dirnames, _ in os.walk(root):
+            current_dir = Path(dirpath)
+            for dirname in list(dirnames):
+                if dirname.endswith(".app"):
+                    app_path = current_dir / dirname
+                    yield root, app_path
+                    dirnames.remove(dirname)
+
+
+def _collect_device_info(store: SQLiteStore) -> int:
+    metadata = {
+        "os": os.name,
+        "platform": platform.platform(),
+        "system": platform.system(),
+        "release": platform.release(),
+        "python": platform.python_version(),
+        "hostname": socket.gethostname(),
+        "cpu_arch": platform.machine(),
+    }
+    content = f"{metadata['system']} {metadata['release']} on {metadata['cpu_arch']}"
+    store.create_event("ingest.device_info", content, metadata)
+    return 1
+
+
+def _collect_app_inventory(store: SQLiteStore, app_roots: list[Path]) -> int:
+    count = 0
+    for root, app_path in _iter_app_bundles(app_roots):
+        app_name = app_path.stem
+        metadata = {
+            "path": str(app_path),
+            "root": str(root),
+            "app_name": app_name,
+        }
+        store.create_event("ingest.app_inventory", app_name, metadata)
+        count += 1
+    return count
+
+
+def _collect_system_settings(store: SQLiteStore) -> int:
+    snapshot = safe_settings_snapshot()
+    store.create_event("ingest.system_settings", "safe local settings snapshot", snapshot)
+    return 1
 
 
 def main() -> int:
@@ -157,16 +281,21 @@ def main() -> int:
     if args.max_bytes <= 0:
         raise SystemExit("--max-bytes must be a positive integer")
 
-    _enforce_consent_and_scope()
+    policy_scopes = _load_enforced_policy_scopes()
+    enforce_scope(policy_scopes, "memory:write", "local ingestion")
 
     roots = resolve_roots(args.roots, args.include_home)
     extensions = parse_extensions(args.extensions)
     excluded_parts = parse_exclude_parts(args.exclude_parts)
+    app_roots = parse_app_roots(args.app_roots)
     db_path = _default_db_path()
 
     scanned = 0
     ingested = 0
     errors = 0
+    device_events = 0
+    app_events = 0
+    settings_events = 0
 
     with SQLiteStore(db_path) as store:
         store.initialize()
@@ -198,11 +327,27 @@ def main() -> int:
             store.create_event("ingest.local_file", content, metadata)
             ingested += 1
 
+        if args.collect_device_info:
+            enforce_scope(policy_scopes, "device:read", "device info collection")
+            device_events = _collect_device_info(store)
+
+        if args.collect_app_inventory:
+            enforce_scope(policy_scopes, "apps:read", "app inventory collection")
+            app_events = _collect_app_inventory(store, app_roots)
+
+        if args.collect_system_settings:
+            enforce_scope(policy_scopes, "settings:read", "system settings collection")
+            settings_events = _collect_system_settings(store)
+
     print(f"DB_PATH={db_path}")
     print(f"ROOTS={','.join(str(root) for root in roots)}")
+    print(f"APP_ROOTS={','.join(str(root) for root in app_roots)}")
     print(f"SCANNED={scanned}")
     print(f"INGESTED={ingested}")
     print(f"ERRORS={errors}")
+    print(f"DEVICE_EVENTS={device_events}")
+    print(f"APP_EVENTS={app_events}")
+    print(f"SETTINGS_EVENTS={settings_events}")
     return 0
 
 

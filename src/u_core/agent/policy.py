@@ -9,6 +9,9 @@ import json
 DEFAULT_ALLOWED_SCOPES: list[str] = [
     "memory:read",
     "memory:write",
+    "device:read",
+    "apps:read",
+    "settings:read",
     "planner:preview",
     "tools:local_safe",
 ]
