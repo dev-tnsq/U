@@ -4,6 +4,7 @@
 The codebase follows a local-first, offline-ready architecture for developer machines, split into core logic and application layers:
 
 - **`src/u_core/`**: Core engine modules including memory (SQLite-backed), agent runtime, ingestion parsers (Telegram/WhatsApp/Notes), reflection engine, and the "Twin" reasoning system.
+- **`src/u_core/agent/`**: Planner schemas/runtime plus local-safe macOS tool adapters and default tool registry wiring.
 - **`src/u_app/`**: Application interface logic, currently featuring a Gradio-based dual-response MVP.
 - **`scripts/`**: Essential bootstrap and execution utilities.
 - **`tests/`**: Organized by module (e.g., `tests/memory/`, `tests/twin/`), containing integration and e2e tests.
