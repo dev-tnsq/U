@@ -14,6 +14,12 @@ from u_core.memory import GraphStore, ProfileStore, SQLiteStore
 from u_core.twin import TwinContext, TwinReasoningEngine, build_twin_context
 
 
+class _FailingClient:
+    def generate_dual_response(self, user_text, grounding, model_profile):
+        del user_text, grounding, model_profile
+        raise RuntimeError("runtime unavailable")
+
+
 class TestTwinReasoningEngine(unittest.TestCase):
     def setUp(self) -> None:
         self.engine = TwinReasoningEngine()
@@ -85,6 +91,45 @@ class TestTwinReasoningEngine(unittest.TestCase):
             )
 
             store.close()
+
+    def test_name_query_resolves_from_profile_snapshot_name(self) -> None:
+        context = TwinContext(profile_snapshot={"name": "Tanishq"})
+
+        response = self.engine.generate_dual_response("what is my name", context)
+
+        self.assertIn("Tanishq", response.supportive_response)
+        self.assertIn("Tanishq", response.honest_response)
+
+    def test_name_query_resolves_from_users_path_metadata(self) -> None:
+        context = TwinContext(
+            recent_events=[
+                {
+                    "metadata": {
+                        "path": "/Users/tanishqmaheshwari/code/U/notes/todo.md",
+                    }
+                }
+            ]
+        )
+
+        response = self.engine.generate_dual_response("who am i", context)
+
+        self.assertIn("tanishqmaheshwari", response.supportive_response)
+        self.assertIn("tanishqmaheshwari", response.honest_response)
+
+    def test_name_query_unknown_returns_local_memory_message(self) -> None:
+        response = self.engine.generate_dual_response("my name", TwinContext())
+
+        self.assertIn("not yet in local memory", response.supportive_response.lower())
+        self.assertIn("not yet in local memory", response.honest_response.lower())
+
+    def test_name_query_is_deterministic_even_if_inference_client_fails(self) -> None:
+        engine = TwinReasoningEngine(inference_client=_FailingClient(), strict_runtime=True)
+        context = TwinContext(profile_snapshot={"name": "Tanishq"})
+
+        response = engine.generate_dual_response("what is my name", context)
+
+        self.assertIn("Tanishq", response.supportive_response)
+        self.assertIn("Tanishq", response.honest_response)
 
 
 if __name__ == "__main__":

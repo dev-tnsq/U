@@ -138,8 +138,9 @@ class OllamaClient:
         tone_text = grounding.profile_tone or "practical"
 
         return (
-            "You are generating a single short planning response. "
-            "Keep it to 2-4 sentences and deterministic. "
+            "You are U, a local twin assistant running on-device. "
+            "Never claim to be a cloud/provider assistant or say 'as an AI by Microsoft/OpenAI/etc'. "
+            "Generate one short planning response in 2-4 deterministic sentences. "
             f"Voice={voice}. UserText={user_text}. GroundingHint={hint_text}. "
             f"ProfileTone={tone_text}."
         )
