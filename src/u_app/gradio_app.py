@@ -10,6 +10,7 @@ import importlib
 import os
 from pathlib import Path
 
+from u_core.agent import PlannerRuntime, build_default_macos_tool_registry
 from u_core.memory import SQLiteStore
 from u_core.twin import (
     LocalHeuristicClient,
@@ -78,6 +79,11 @@ def _build_engine_from_env() -> TwinReasoningEngine:
     return TwinReasoningEngine(inference_client=client, model_profile=model_profile)
 
 
+def build_planner_runtime() -> PlannerRuntime:
+    """Construct planner runtime with local-safe default tool registry."""
+    return PlannerRuntime(tool_registry=build_default_macos_tool_registry())
+
+
 def generate_dual_outputs(
     user_text: str,
     context: TwinContext,
@@ -97,6 +103,8 @@ def generate_dual_outputs(
 
 def run_local_inference(user_text: str, db_path: Path | None = None) -> tuple[str, str, str, str]:
     target_db_path = db_path or _default_db_path()
+    # Instantiate planner runtime in app path so planner tools are available for later wiring.
+    _ = build_planner_runtime()
 
     with SQLiteStore(target_db_path) as store:
         store.initialize()
