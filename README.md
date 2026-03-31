@@ -37,3 +37,18 @@ python scripts/setup_u.py
 ```
 
 The script creates local data directories under `~/Library/Application Support/U` (or `~/U/data` fallback), initializes the database schema, checks for `ollama` on your PATH, and prints actionable next steps.
+
+## Run UI
+
+Launch the local Gradio MVP to preview side-by-side Supportive U and Honest U outputs plus a planner preview panel.
+
+```bash
+pip install gradio
+python scripts/run_ui.py
+```
+
+Optional: provide a custom SQLite path.
+
+```bash
+python scripts/run_ui.py --db-path /path/to/memory.sqlite3
+```
