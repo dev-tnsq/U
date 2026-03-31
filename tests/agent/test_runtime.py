@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -10,6 +11,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from u_core.agent import PlannerRuntime
+from u_core.memory import SQLiteStore
 
 
 class _FakeExecutor:
@@ -71,6 +73,34 @@ class TestPlannerRuntime(unittest.TestCase):
 
         self.assertEqual([], results)
         self.assertTrue(envelope.executed)
+
+    def test_execute_with_store_writes_planner_execution_reflection(self) -> None:
+        executor = _FakeExecutor()
+        runtime = PlannerRuntime(executor)
+        envelope = runtime.create_envelope(
+            "Ship parser",
+            proposed_actions=["run tests"],
+            trust_level="execute-approved",
+        )
+        runtime.apply_approval(envelope, approved=True, reviewer="u")
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "memory.db"
+            schema_path = ROOT / "src" / "u_core" / "memory" / "schema.sql"
+            store = SQLiteStore(db_path, schema_path)
+            store.initialize()
+            try:
+                runtime.execute(envelope, store=store)
+
+                reflections = store.list_reflections(limit=10, kind="planner_execution")
+                self.assertEqual(1, len(reflections))
+                self.assertEqual("Ship parser", reflections[0].metadata["goal"])
+                self.assertEqual(["run tests"], reflections[0].metadata["actions"])
+                self.assertEqual(["done:run tests"], reflections[0].metadata["results"])
+                self.assertTrue(reflections[0].metadata["executed"])
+                self.assertTrue(reflections[0].metadata["success"])
+            finally:
+                store.close()
 
 
 if __name__ == "__main__":
