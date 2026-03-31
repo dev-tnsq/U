@@ -69,7 +69,7 @@ class SQLiteStore:
                 (event_type, content, metadata_json, created_at),
             )
         return Event(
-            id=int(cursor.lastrowid),
+            id=int(cursor.lastrowid or 0),
             event_type=event_type,
             content=content,
             metadata=metadata or {},
@@ -147,7 +147,7 @@ class SQLiteStore:
                 (kind, content, metadata_json, created_at),
             )
         return Reflection(
-            id=int(cursor.lastrowid),
+            id=int(cursor.lastrowid or 0),
             kind=kind,
             content=content,
             metadata=metadata or {},
