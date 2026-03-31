@@ -7,10 +7,18 @@ uses deterministic in-process twin logic, and does not call network services.
 from __future__ import annotations
 
 import importlib
+import os
 from pathlib import Path
 
 from u_core.memory import SQLiteStore
-from u_core.twin import TwinContext, TwinReasoningEngine, build_twin_context
+from u_core.twin import (
+    LocalHeuristicClient,
+    OllamaClient,
+    TwinContext,
+    TwinReasoningEngine,
+    build_twin_context,
+    get_model_profile,
+)
 
 
 def _default_db_path() -> Path:
@@ -43,9 +51,40 @@ def build_planner_preview(user_text: str, context: TwinContext) -> tuple[str, st
     return goal, actions_text
 
 
-def generate_dual_outputs(user_text: str, context: TwinContext) -> tuple[str, str, str, str]:
-    engine = TwinReasoningEngine()
-    response = engine.generate_dual_response(user_text, context)
+def _resolve_runtime_name(raw_value: str | None) -> str:
+    normalized = (raw_value or "heuristic").strip().lower()
+    if normalized == "ollama":
+        return "ollama"
+    return "heuristic"
+
+
+def _resolve_profile_name(raw_value: str | None) -> str:
+    normalized = (raw_value or "8gb").strip().lower()
+    if normalized == "16gb":
+        return "16gb"
+    return "8gb"
+
+
+def _build_engine_from_env() -> TwinReasoningEngine:
+    runtime_name = _resolve_runtime_name(os.getenv("U_MODEL_RUNTIME"))
+    profile_name = _resolve_profile_name(os.getenv("U_MODEL_PROFILE"))
+    model_profile = get_model_profile(profile_name)
+
+    if runtime_name == "ollama":
+        client = OllamaClient()
+    else:
+        client = LocalHeuristicClient()
+
+    return TwinReasoningEngine(inference_client=client, model_profile=model_profile)
+
+
+def generate_dual_outputs(
+    user_text: str,
+    context: TwinContext,
+    engine: TwinReasoningEngine | None = None,
+) -> tuple[str, str, str, str]:
+    runtime_engine = engine or _build_engine_from_env()
+    response = runtime_engine.generate_dual_response(user_text, context)
     planner_goal, planner_actions = build_planner_preview(user_text, context)
 
     return (
