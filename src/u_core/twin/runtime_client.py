@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from subprocess import CalledProcessError, CompletedProcess, run
 from typing import Callable, Protocol
 
@@ -45,6 +45,15 @@ def get_model_profile(name: str | None) -> ModelProfile:
     if normalized == "16gb":
         return _PROFILE_16GB
     return _PROFILE_8GB
+
+
+def clone_profile_with_model_name(profile: ModelProfile, model_name: str | None) -> ModelProfile:
+    """Return a profile clone with model_name override when provided."""
+
+    normalized = (model_name or "").strip()
+    if not normalized:
+        return profile
+    return replace(profile, model_name=normalized)
 
 
 class InferenceClient(Protocol):

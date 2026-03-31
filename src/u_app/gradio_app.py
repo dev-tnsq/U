@@ -18,6 +18,7 @@ from u_core.twin import (
     TwinContext,
     TwinReasoningEngine,
     build_twin_context,
+    clone_profile_with_model_name,
     get_model_profile,
 )
 
@@ -66,10 +67,16 @@ def _resolve_profile_name(raw_value: str | None) -> str:
     return "8gb"
 
 
+def _resolve_model_name(raw_value: str | None) -> str | None:
+    normalized = (raw_value or "").strip()
+    return normalized or None
+
+
 def _build_engine_from_env() -> TwinReasoningEngine:
     runtime_name = _resolve_runtime_name(os.getenv("U_MODEL_RUNTIME"))
     profile_name = _resolve_profile_name(os.getenv("U_MODEL_PROFILE"))
-    model_profile = get_model_profile(profile_name)
+    model_name = _resolve_model_name(os.getenv("U_MODEL_NAME"))
+    model_profile = clone_profile_with_model_name(get_model_profile(profile_name), model_name)
 
     if runtime_name == "ollama":
         client = OllamaClient()
