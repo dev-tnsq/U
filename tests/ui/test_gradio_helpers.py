@@ -10,6 +10,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from u_app.gradio_app import (
+    _resolve_model_name,
     _resolve_profile_name,
     _resolve_runtime_name,
     build_planner_runtime,
@@ -40,6 +41,11 @@ class TestGradioAppHelpers(unittest.TestCase):
         self.assertEqual("8gb", _resolve_profile_name(None))
         self.assertEqual("8gb", _resolve_profile_name("24gb"))
         self.assertEqual("16gb", _resolve_profile_name("16GB"))
+
+    def test_model_name_parser_returns_none_for_empty_values(self) -> None:
+        self.assertIsNone(_resolve_model_name(None))
+        self.assertIsNone(_resolve_model_name("   "))
+        self.assertEqual("qwen2.5:7b", _resolve_model_name(" qwen2.5:7b "))
 
     def test_planner_preview_uses_fallback_goal_for_empty_input(self) -> None:
         goal, actions = build_planner_preview("", TwinContext())

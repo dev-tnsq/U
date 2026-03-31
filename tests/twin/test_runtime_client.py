@@ -10,7 +10,12 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from u_core.twin import TwinContext, TwinReasoningEngine, get_model_profile
-from u_core.twin.runtime_client import GroundingMetadata, LocalHeuristicClient, OllamaClient
+from u_core.twin.runtime_client import (
+    GroundingMetadata,
+    LocalHeuristicClient,
+    OllamaClient,
+    clone_profile_with_model_name,
+)
 
 
 class _FailingClient:
@@ -36,6 +41,21 @@ class TestRuntimeClientProfiles(unittest.TestCase):
 
         self.assertEqual("16gb", profile.name)
         self.assertEqual("llama3.1:8b", profile.model_name)
+
+    def test_clone_profile_with_model_name_overrides_when_present(self) -> None:
+        base_profile = get_model_profile("8gb")
+
+        overridden = clone_profile_with_model_name(base_profile, "qwen2.5:7b")
+
+        self.assertEqual("qwen2.5:7b", overridden.model_name)
+        self.assertEqual(base_profile.context_window, overridden.context_window)
+
+    def test_clone_profile_with_model_name_ignores_empty_override(self) -> None:
+        base_profile = get_model_profile("16gb")
+
+        same = clone_profile_with_model_name(base_profile, "   ")
+
+        self.assertIs(base_profile, same)
 
 
 class TestRuntimeClientBehavior(unittest.TestCase):
