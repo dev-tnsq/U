@@ -12,6 +12,7 @@ if str(SRC) not in sys.path:
 from u_app.gradio_app import (
     _resolve_profile_name,
     _resolve_runtime_name,
+    build_planner_runtime,
     build_planner_preview,
     generate_dual_outputs,
 )
@@ -19,6 +20,17 @@ from u_core.twin import TwinContext
 
 
 class TestGradioAppHelpers(unittest.TestCase):
+    def test_build_planner_runtime_includes_default_macos_tools(self) -> None:
+        runtime = build_planner_runtime()
+
+        self.assertIsNotNone(runtime.tool_registry)
+        assert runtime.tool_registry is not None
+        names = [tool.name for tool in runtime.tool_registry.list_tools()]
+        self.assertEqual(
+            ["app_open_preview", "calendar_draft_event", "file_search"],
+            names,
+        )
+
     def test_runtime_name_parser_defaults_and_validates(self) -> None:
         self.assertEqual("heuristic", _resolve_runtime_name(None))
         self.assertEqual("heuristic", _resolve_runtime_name("unknown"))
