@@ -10,7 +10,12 @@ import importlib
 import os
 from pathlib import Path
 
-from u_core.agent import PlannerRuntime, build_default_macos_tool_registry
+from u_core.agent import (
+    PlannerRuntime,
+    build_default_macos_tool_registry,
+    ensure_policy_allows_runtime,
+    load_policy,
+)
 from u_core.memory import SQLiteStore
 from u_core.twin import (
     LocalHeuristicClient,
@@ -155,6 +160,17 @@ def build_app(db_path: Path | None = None):
 
 
 def launch(db_path: Path | None = None) -> None:
+    policy = load_policy()
+    try:
+        ensure_policy_allows_runtime(policy)
+    except RuntimeError as err:
+        if not policy.consent_granted:
+            raise RuntimeError(
+                "Local consent is required before launching the UI. "
+                "Run `python scripts/grant_consent.py --granted-by <your-name>` first."
+            ) from err
+        raise
+
     app = build_app(db_path=db_path)
     app.launch()
 
