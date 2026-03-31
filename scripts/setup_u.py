@@ -111,7 +111,8 @@ def format_next_steps(result: SetupResult) -> str:
             "Next steps:",
             "1. If ollama is not found, install it manually and ensure it is on PATH.",
             "2. Start your local model runtime (example: `ollama serve`).",
-            "3. Continue with local usage flows from the project README.",
+            "3. Grant explicit local consent (example: `python scripts/grant_consent.py --granted-by <your-name>`).",
+            "4. Continue with local usage flows from the project README.",
         ]
     )
 
