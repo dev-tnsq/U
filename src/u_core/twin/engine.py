@@ -2,18 +2,25 @@
 
 from __future__ import annotations
 
+from .runtime_client import InferenceClient, LocalHeuristicClient, ModelProfile, get_model_profile
 from .schemas import GroundingMetadata, TwinContext, TwinResponse
 
 
 class TwinReasoningEngine:
     """Generate dual voice responses from local context without model calls."""
 
-    def generate_dual_response(self, user_text: str, context: TwinContext) -> TwinResponse:
-        cleaned_text = (user_text or "").strip() or "that"
-        grounding = self._build_grounding(context)
+    def __init__(
+        self,
+        inference_client: InferenceClient | None = None,
+        model_profile: ModelProfile | None = None,
+    ) -> None:
+        self._fallback_client = LocalHeuristicClient()
+        self._inference_client = inference_client or self._fallback_client
+        self._model_profile = model_profile or get_model_profile("8gb")
 
-        supportive = self._build_supportive_response(cleaned_text, grounding)
-        honest = self._build_honest_response(cleaned_text, grounding)
+    def generate_dual_response(self, user_text: str, context: TwinContext) -> TwinResponse:
+        grounding = self._build_grounding(context)
+        supportive, honest = self._generate_with_fallback(user_text, grounding)
 
         return TwinResponse(
             supportive_response=supportive,
@@ -21,26 +28,23 @@ class TwinReasoningEngine:
             grounding=grounding if grounding.hints else None,
         )
 
-    def _build_supportive_response(self, user_text: str, grounding: GroundingMetadata) -> str:
-        base = f"You are moving in the right direction with {user_text}."
-        if grounding.profile_tone:
-            base += f" I will match your preferred {grounding.profile_tone} tone while helping you plan the next step."
-        else:
-            base += " I will keep this practical and calm so you can make progress." 
-
-        if grounding.hints:
-            base += f" Grounding hint: {grounding.hints[0]}."
-        return base
-
-    def _build_honest_response(self, user_text: str, grounding: GroundingMetadata) -> str:
-        base = f"Direct take: {user_text} needs a concrete tradeoff decision and a short execution plan."
-        if grounding.outcomes_used:
-            base += f" Prior outcomes suggest you should preserve what worked: {grounding.outcomes_used[0]}."
-        elif grounding.tags_used:
-            base += f" Your recent focus tag is {grounding.tags_used[0]}, so avoid unrelated tasks."
-        else:
-            base += " There is limited prior memory, so start small and measure one clear result."
-        return base
+    def _generate_with_fallback(
+        self,
+        user_text: str,
+        grounding: GroundingMetadata,
+    ) -> tuple[str, str]:
+        try:
+            return self._inference_client.generate_dual_response(
+                user_text,
+                grounding,
+                self._model_profile,
+            )
+        except Exception:
+            return self._fallback_client.generate_dual_response(
+                user_text,
+                grounding,
+                self._model_profile,
+            )
 
     def _build_grounding(self, context: TwinContext) -> GroundingMetadata:
         profile_tone = None

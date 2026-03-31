@@ -9,11 +9,26 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from u_app.gradio_app import build_planner_preview, generate_dual_outputs
+from u_app.gradio_app import (
+    _resolve_profile_name,
+    _resolve_runtime_name,
+    build_planner_preview,
+    generate_dual_outputs,
+)
 from u_core.twin import TwinContext
 
 
 class TestGradioAppHelpers(unittest.TestCase):
+    def test_runtime_name_parser_defaults_and_validates(self) -> None:
+        self.assertEqual("heuristic", _resolve_runtime_name(None))
+        self.assertEqual("heuristic", _resolve_runtime_name("unknown"))
+        self.assertEqual("ollama", _resolve_runtime_name("OLLAMA"))
+
+    def test_profile_name_parser_defaults_and_validates(self) -> None:
+        self.assertEqual("8gb", _resolve_profile_name(None))
+        self.assertEqual("8gb", _resolve_profile_name("24gb"))
+        self.assertEqual("16gb", _resolve_profile_name("16GB"))
+
     def test_planner_preview_uses_fallback_goal_for_empty_input(self) -> None:
         goal, actions = build_planner_preview("", TwinContext())
 
