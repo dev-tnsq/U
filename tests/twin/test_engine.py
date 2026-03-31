@@ -73,12 +73,14 @@ class TestTwinReasoningEngine(unittest.TestCase):
             )
             response = self.engine.generate_dual_response("What should I do this week?", context)
 
-            self.assertIsNotNone(response.grounding)
-            self.assertTrue(response.grounding.hints)
+            grounding = response.grounding
+            self.assertIsNotNone(grounding)
+            assert grounding is not None
+            self.assertTrue(grounding.hints)
             self.assertTrue(
-                response.grounding.tags_used
-                or response.grounding.outcomes_used
-                or bool(response.grounding.profile_tone)
+                grounding.tags_used
+                or grounding.outcomes_used
+                or bool(grounding.profile_tone)
             )
 
             store.close()
