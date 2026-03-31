@@ -81,6 +81,7 @@ class TestTwinReasoningEngine(unittest.TestCase):
                 grounding.tags_used
                 or grounding.outcomes_used
                 or bool(grounding.profile_tone)
+
             )
 
             store.close()
