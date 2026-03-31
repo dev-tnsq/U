@@ -11,6 +11,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from u_core.agent import PlannerRuntime
+from u_core.agent import RegisteredTool, ToolRegistry
 from u_core.memory import SQLiteStore
 
 
@@ -101,6 +102,76 @@ class TestPlannerRuntime(unittest.TestCase):
                 self.assertTrue(reflections[0].metadata["success"])
             finally:
                 store.close()
+
+    def test_execute_runs_read_only_tool_with_approved_envelope(self) -> None:
+        registry = ToolRegistry()
+        registry.register(
+            RegisteredTool(
+                name="file_search",
+                risk="read_only",
+                handler=lambda payload: f"found:{payload['query']}",
+                description="Search files",
+            )
+        )
+        runtime = PlannerRuntime(tool_registry=registry)
+        envelope = runtime.create_envelope(
+            "Find notes",
+            proposed_actions=['tool:file_search:{"query":"notes"}'],
+            trust_level="execute-approved",
+        )
+        runtime.apply_approval(envelope, approved=True, reviewer="u", reason="approved")
+
+        results = runtime.execute(envelope)
+
+        self.assertEqual(["found:notes"], results)
+
+    def test_irreversible_tool_fails_without_confirm_token(self) -> None:
+        registry = ToolRegistry()
+        registry.register(
+            RegisteredTool(
+                name="delete_note",
+                risk="irreversible_write",
+                handler=lambda payload: "deleted",
+                description="Delete note",
+            )
+        )
+        runtime = PlannerRuntime(tool_registry=registry)
+        envelope = runtime.create_envelope(
+            "Delete old note",
+            proposed_actions=['tool:delete_note:{"id":"1"}'],
+            trust_level="execute-approved",
+        )
+        runtime.apply_approval(envelope, approved=True, reviewer="u", reason="looks safe")
+
+        with self.assertRaisesRegex(PermissionError, "CONFIRM"):
+            runtime.execute(envelope)
+
+    def test_irreversible_tool_executes_with_confirm_token(self) -> None:
+        registry = ToolRegistry()
+        registry.register(
+            RegisteredTool(
+                name="delete_note",
+                risk="irreversible_write",
+                handler=lambda payload: f"deleted:{payload['id']}",
+                description="Delete note",
+            )
+        )
+        runtime = PlannerRuntime(tool_registry=registry)
+        envelope = runtime.create_envelope(
+            "Delete old note",
+            proposed_actions=['tool:delete_note:{"id":"1"}'],
+            trust_level="execute-approved",
+        )
+        runtime.apply_approval(
+            envelope,
+            approved=True,
+            reviewer="u",
+            reason="CONFIRM remove stale note",
+        )
+
+        results = runtime.execute(envelope)
+
+        self.assertEqual(["deleted:1"], results)
 
 
 if __name__ == "__main__":
