@@ -27,3 +27,13 @@ graph_store.upsert_edge("u", "pipeline", "uses", weight=0.9)
 
 store.close()
 ```
+
+## First-run setup
+
+Run the local setup script to bootstrap data directories and initialize SQLite:
+
+```bash
+python scripts/setup_u.py
+```
+
+The script creates local data directories under `~/Library/Application Support/U` (or `~/U/data` fallback), initializes the database schema, checks for `ollama` on your PATH, and prints actionable next steps.
