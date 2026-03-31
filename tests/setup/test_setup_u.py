@@ -110,3 +110,4 @@ def test_run_setup_creates_db_and_reports_next_steps(tmp_path: Path, monkeypatch
     assert "U local setup complete." in message
     assert "Next steps:" in message
     assert "not found" in message
+    assert "grant_consent.py" in message
